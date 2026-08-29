@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""Provider-free deterministic Gearbox release fixture."""
+
+import json
+
+print(json.dumps({
+    "fixture": "opsle-gearbox-release-v1",
+    "status": "PASS",
+}, separators=(",", ":"), sort_keys=True))

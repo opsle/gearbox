@@ -1,0 +1,13 @@
+{
+  "schema": "opsle.gearbox.policy.v1",
+  "authority_id": "opsle.gearbox.release-fixture/v1",
+  "gears": {
+    "release-fixture": {
+      "kind": "deterministic",
+      "task_types": ["fixture"],
+      "argv_exact": ["release-fixture"],
+      "executable_path": "../tools/release-fixture",
+      "executable_sha256": "a7e7592b784f49087cc5164f718524b8e4ba36081c6c1f77a98744cbc6b80c7e"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opsle-gearbox"
+version = "0.1.0"
+description = "Bounded deterministic and lower-cost execution for a primary developer"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{name = "Opsle"}]
+classifiers = [
+  "Programming Language :: Python :: 3",
+]
+
+[project.scripts]
+gearbox = "opsle_gearbox.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

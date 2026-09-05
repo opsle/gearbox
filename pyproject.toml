@@ -17,6 +17,7 @@ classifiers = [
 
 [project.scripts]
 gearbox = "opsle_gearbox.cli:main"
+gearbox-route = "opsle_gearbox.route:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

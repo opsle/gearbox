@@ -22,6 +22,8 @@ readiness.
 - one injected helper transport, one attempt, no retry or fallback;
 - raw artifact hashes and locators outside the compact result;
 - one compact result on stdout and a named operator indicator on stderr;
+- one small deterministic route selector for `PLAN`, `BUILD`, `TEST`,
+  `DEPLOY`, and `IDEAS` pipeline phases;
 - an `opsle.value-receipt.v1` sidecar with bounded observational claims.
 
 The bundled CLI executes deterministic gears only. Cognitive execution requires
@@ -32,7 +34,9 @@ request when no transport is present; it never silently falls back.
 
 Gearbox is not a durable supervisor, queue, scheduler, discovery engine,
 retry/recovery controller, persistent agent hierarchy, exact-session resume
-mechanism, general autonomous-task platform, or provider router.
+mechanism, general autonomous-task platform, dynamic discovery engine, or
+probabilistic provider router. Its small route selector uses only explicit
+caller-supplied availability and a fixed rule.
 
 Context Firewall is an external integration. Gearbox decides where bounded work
 executes; Context Firewall decides what decision-relevant evidence returns. The
@@ -94,6 +98,18 @@ PYTHONPATH=src python3 -m opsle_gearbox.cli \
 Canonical result JSON is written to stdout. The concise `[Gearbox] ...`
 indicator is written to stderr. Raw stdout/stderr and helper evidence stay under
 the mode-0700 state root.
+
+For a small task pipeline, route one phase by sending a request on stdin:
+
+```text
+PYTHONPATH=src python3 -m opsle_gearbox.route <<'JSON'
+{"schema":"opsle.gearbox.route-request.v1","phase":"BUILD","choice":"auto","available":{"codex":true,"claude":true,"deterministic":false}}
+JSON
+```
+
+The selector returns one route: `codex`, `claude`, `deterministic`, or `noop`.
+`TEST` and `DEPLOY` are deterministic when a command is configured and otherwise
+become explicit no-ops. It performs no execution, retries, discovery, or state.
 
 ## Verification
 

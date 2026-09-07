@@ -136,3 +136,7 @@ Visible Value receipt, and stdout/stderr separation.
 ## License
 
 AGPL-3.0-only. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+## Routing policy
+
+Agent Routing Policy is consolidated into Gearbox. Its [specifications and provenance](docs/agent-routing-policy/README.md) map to the existing route implementation and tests.

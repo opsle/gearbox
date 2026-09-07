@@ -25,9 +25,9 @@ def select_route(value: object) -> dict[str, Any]:
     phase = value["phase"]
     choice = value["choice"]
     available = value["available"]
-    if phase not in PHASES:
+    if not isinstance(phase, str) or phase not in PHASES:
         raise RouteError("unknown phase")
-    if choice not in CHOICES:
+    if not isinstance(choice, str) or choice not in CHOICES:
         raise RouteError("unknown provider choice")
     if not isinstance(available, dict) or set(available) != {"codex", "claude", "deterministic"}:
         raise RouteError("available must contain exactly codex, claude, and deterministic")

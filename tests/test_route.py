@@ -34,6 +34,16 @@ class RouteTests(unittest.TestCase):
         with self.assertRaises(RouteError):
             select_route(request(choice="claude", claude=False))
 
+    def test_unhashable_phase_and_choice_fail_as_route_errors(self):
+        invalid_phase = request()
+        invalid_phase["phase"] = []
+        invalid_choice = request()
+        invalid_choice["choice"] = {}
+        with self.assertRaisesRegex(RouteError, "unknown phase"):
+            select_route(invalid_phase)
+        with self.assertRaisesRegex(RouteError, "unknown provider choice"):
+            select_route(invalid_choice)
+
     def test_cli_reads_one_json_request_from_stdin(self):
         environment = {**os.environ, "PYTHONPATH": "src"}
         result = subprocess.run(

@@ -103,11 +103,14 @@ For a small task pipeline, route one phase by sending a request on stdin:
 
 ```text
 PYTHONPATH=src python3 -m opsle_gearbox.route <<'JSON'
-{"schema":"opsle.gearbox.route-request.v1","phase":"BUILD","choice":"auto","available":{"codex":true,"claude":true,"deterministic":false}}
+{"schema":"opsle.gearbox.route-request.v2","phase":"BUILD","choice":"auto","available":{"codex":true,"claude":true,"deterministic":false},"profiles":{"codex":{"model":null,"effort":null},"claude":{"model":null,"effort":null}}}
 JSON
 ```
 
-The selector returns one route: `codex`, `claude`, `deterministic`, or `noop`.
+The selector returns one route: `codex`, `claude`, `deterministic`, or `noop`,
+plus the selected model and reasoning effort for provider routes. Null profile
+values select the provider default model and the bounded phase effort policy;
+explicit profile values survive unchanged.
 `TEST` and `DEPLOY` are deterministic when a command is configured and otherwise
 become explicit no-ops. It performs no execution, retries, discovery, or state.
 

@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# One-time OPERATOR gate (run as root on the VPS host): install the repo-scoped
+# TEST runner used by .github/workflows/ci.yml.
+#   sudo bash ops/ci/install-test-runner < registration-token-file
+set -Eeuo pipefail
+
+readonly account=gearbox-ci
+readonly home=/var/lib/gearbox-ci
+readonly runner_dir="$home/runner"
+readonly support=/usr/local/lib/gearbox-ci-runner
+readonly repo_url=https://github.com/opsle/gearbox
+readonly unit=gearbox-ci-runner.service
+readonly version=2.336.0
+readonly archive_sha=04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d
+readonly archive_url="https://github.com/actions/runner/releases/download/v$version/actions-runner-linux-x64-$version.tar.gz"
+
+[[ $EUID -eq 0 ]] || { echo "Run as root." >&2; exit 77; }
+IFS= read -r token
+[[ $token =~ ^[A-Za-z0-9]{20,64}$ ]] || { echo "Expected one registration token on stdin." >&2; exit 64; }
+for tool in git python3; do command -v "$tool" >/dev/null || { echo "$tool is required on the host." >&2; exit 69; }; done
+
+id "$account" >/dev/null 2>&1 ||
+  useradd --system --home-dir "$home" --create-home --shell /usr/sbin/nologin "$account"
+install -d -o "$account" -g "$account" -m 0700 "$runner_dir" "$home/cache"
+
+install -d -o root -g root -m 0755 "$support"
+cat >"$support/job-started.sh" <<'HOOK'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+for variable in DATABASE_URL GEARBOX_DEPLOY_SSH_KEY OPENAI_API_KEY OPSLE_CODEX_AUTH; do
+  [[ -z ${!variable:-} ]] || { echo "TEST runner rejected $variable" >&2; exit 78; }
+done
+for path in /home/deploy/.config/gh/hosts.yml /var/run/docker.sock; do
+  if [[ -r $path || -w $path ]]; then echo "TEST runner can reach $path" >&2; exit 78; fi
+done
+HOOK
+cat >"$support/job-completed.sh" <<'HOOK'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+find /var/lib/gearbox-ci/runner/_work -xdev -mindepth 1 -delete
+HOOK
+chmod 0755 "$support/job-started.sh" "$support/job-completed.sh"
+
+archive="$(mktemp)"
+trap 'rm -f -- "$archive"' EXIT
+curl --fail --silent --show-error --location --output "$archive" "$archive_url"
+[[ "$(sha256sum "$archive" | cut -d' ' -f1)" == "$archive_sha" ]] || { echo "Runner archive hash mismatch." >&2; exit 65; }
+tar -xzf "$archive" -C "$runner_dir"
+chown -R "$account:$account" "$runner_dir"
+
+runuser -u "$account" -- env HOME="$home" "$runner_dir/config.sh" \
+  --unattended --replace \
+  --url "$repo_url" --token "$token" \
+  --name platform-ci-gearbox-vps --labels platform-ci,gearbox --work "$runner_dir/_work"
+
+cat >"/etc/systemd/system/$unit" <<UNIT
+[Unit]
+Description=Gearbox TEST runner (ci.yml)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=$account
+Group=$account
+WorkingDirectory=$runner_dir
+ExecStart=$runner_dir/bin/Runner.Listener run --once
+Restart=always
+RestartSec=10s
+Environment=HOME=$home
+Environment=CI=true
+Environment=RUNNER_TOOL_CACHE=$home/cache/tool
+Environment=ACTIONS_RUNNER_HOOK_JOB_STARTED=$support/job-started.sh
+Environment=ACTIONS_RUNNER_HOOK_JOB_COMPLETED=$support/job-completed.sh
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=$home
+InaccessiblePaths=-/home/deploy -/root -/var/run/docker.sock
+CapabilityBoundingSet=
+RestrictSUIDSGID=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now "$unit"
+echo "Installed $unit (labels platform-ci,gearbox)."

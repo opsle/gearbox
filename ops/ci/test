@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Canonical TEST stage for opsle/gearbox. GitHub Actions and agents run this same command.
+#   ops/ci/test
+set -Eeuo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+
+step() { printf '\n==> %s\n' "$*"; }
+
+step "Run test suite and compile checks"
+./tools/verify
+
+step "Test CLI entry point"
+PYTHONPATH=src python3 -m opsle_gearbox.cli --help >/dev/null

@@ -1,0 +1,49 @@
+name: Deploy
+
+# DEPLOY and VERIFY run only for the exact SHA that the main-branch CI run just
+# tested successfully. workflow_run always executes this file as it exists on the
+# default branch, so a pull request cannot change what deploys. The deploy runner
+# additionally refuses every job that is not this file on main.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-gearbox
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # GEARBOX_DEPLOY_ENABLED is the single switch that makes GitHub the release owner.
+    # Leave it unset while another release path is authoritative.
+    if: >-
+      vars.GEARBOX_DEPLOY_ENABLED == 'true' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: [self-hosted, linux, x64, gearbox-deploy]
+    timeout-minutes: 30
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Check out the tested SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: DEPLOY
+        id: deploy
+        run: |
+          status=0
+          ops/ci/deploy "$SHA" || status=$?
+          if [[ $status -eq 75 ]]; then echo "superseded=true" >>"$GITHUB_OUTPUT"; exit 0; fi
+          exit "$status"
+
+      - name: VERIFY
+        if: steps.deploy.outputs.superseded != 'true'
+        run: ops/ci/verify "$SHA"

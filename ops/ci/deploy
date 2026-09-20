@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Canonical DEPLOY stage: publish one exact merged SHA as a component release.
+#   ops/ci/deploy SHA          run from a clean checkout of exactly SHA
+set -Eeuo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+
+readonly sha="${1:-}"
+[[ $sha =~ ^[0-9a-f]{40}$ ]] || { echo "usage: ops/ci/deploy SHA" >&2; exit 64; }
+readonly component="gearbox"
+readonly release_root="${OPSLE_COMPONENT_ROOT:-/opt/opsle-components}/$component"
+
+fail() { echo "deploy: $1" >&2; exit 1; }
+
+[[ "$(git rev-parse HEAD)" == "$sha" ]] || fail "the checkout is not exactly $sha"
+# Only the current tip of main may deploy; an older merge is simply superseded.
+tip="$(git ls-remote origin refs/heads/main | cut -f1)"
+if [[ $tip != "$sha" ]]; then
+  echo "deploy: $sha is not the tip of main ($tip); superseded, nothing deployed" >&2
+  exit 75
+fi
+[[ -z "$(git status --porcelain --untracked-files=normal)" ]] || fail "the checkout is not clean"
+
+mkdir -p "$release_root/releases" "$release_root/receipts"
+exec 9>"$release_root/.release.lock"
+flock -n 9 || fail "another $component release is running"
+
+release_dir="$release_root/releases/$sha"
+previous="$(readlink "$release_root/current" || true)"
+
+if [[ ! -d $release_dir ]]; then
+  candidate="$release_root/releases/.candidate-$sha-$$"
+  trap 'rm -rf -- "$candidate"' EXIT
+  mkdir -p "$candidate"
+  git archive "$sha" | tar -x -C "$candidate"
+  python3 -m compileall -q "$candidate/src"
+  chmod -R a+rX "$candidate"
+  mv "$candidate" "$release_dir"
+  trap - EXIT
+fi
+
+switch() {
+  ln -sfn "$1" "$release_root/current.next"
+  mv -Tf "$release_root/current.next" "$release_root/current"
+}
+
+switch "$release_dir"
+printf '%s\n' "$previous" >"$release_root/previous-release"
+
+receipt="$release_root/receipts/deploy-$sha.json"
+cat >"$receipt" <<RECEIPT
+{
+  "component": "$component",
+  "revision": "$sha",
+  "previous": "${previous##*/}",
+  "deployed_at": "$(date -u +%FT%TZ)",
+  "status": "active"
+}
+RECEIPT
+
+echo "deploy: released $component $sha at $release_root"

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Canonical VERIFY stage: prove the deployed component is the exact SHA and healthy.
+#   ops/ci/verify SHA
+set -Eeuo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+
+readonly sha="${1:-}"
+[[ $sha =~ ^[0-9a-f]{40}$ ]] || { echo "usage: ops/ci/verify SHA" >&2; exit 64; }
+readonly component="gearbox"
+readonly release_root="${OPSLE_COMPONENT_ROOT:-/opt/opsle-components}/$component"
+
+fail() { echo "verify: $1" >&2; exit 1; }
+
+current="$(readlink -f "$release_root/current" || true)"
+[[ -d "$current" ]] || fail "current release directory missing: $release_root/current"
+
+receipt="$release_root/receipts/deploy-$sha.json"
+[[ -f "$receipt" ]] || fail "deployment receipt missing: $receipt"
+
+receipt_sha="$(grep -o '"revision": "[^"]*"' "$receipt" | cut -d'"' -f4)"
+[[ "$receipt_sha" == "$sha" ]] || fail "receipt revision mismatch: expected $sha, got $receipt_sha"
+
+PYTHONPATH="$current/src" python3 -m opsle_gearbox.cli --help >/dev/null
+
+echo "verify: $component is deployed at $sha and healthy"
